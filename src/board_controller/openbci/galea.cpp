@@ -381,6 +381,7 @@ void Galea::read_thread ()
 
             double timestamp_device = 0.0;
             memcpy (&timestamp_device, b + 64 + offset, 8);
+            timestamp_device /= 1000; // from ms to seconds
 
             package[board_descr["timestamp_channel"].get<int> ()] = timestamp_device + time_delta;
 
