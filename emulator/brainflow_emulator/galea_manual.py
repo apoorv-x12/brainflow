@@ -14,7 +14,6 @@ from brainflow_emulator.emulate_common import TestFailureError, log_multilines
 class State (enum.Enum):
     wait = 'wait'
     stream = 'stream'
-    send_once = 'send_once'
 
 
 class Message (enum.Enum):
@@ -22,7 +21,7 @@ class Message (enum.Enum):
     stop_stream = b's'
     ack_values = (b'd', b'~6', b'~5', b'o', b'F0')
     ack_from_device = b'A'
-    time_calc_command = b'F4'
+    time_calc_command = b'F4444444'
 
 
 class GaleaEmulator (object):
@@ -50,7 +49,8 @@ class GaleaEmulator (object):
                 elif msg in Message.ack_values.value or msg.decode ('utf-8').startswith ('x'):
                     self.server_socket.sendto (Message.ack_from_device.value, self.addr)
                 elif msg == Message.time_calc_command.value:
-                    self.state = State.send_once.value
+                    resp = bytearray (struct.pack ('d', 1.0001))
+                    self.server_socket.sendto (resp, self.addr)
                 else:
                     if msg:
                         # we dont handle board config characters because they dont change package format
@@ -58,7 +58,7 @@ class GaleaEmulator (object):
             except socket.timeout:
                 logging.debug ('timeout for recv')
 
-            if self.state == State.stream.value or self.state == State.send_once.value:
+            if self.state == State.stream.value:
                 transaction = list ()
                 for _ in range (self.transaction_size):
                     single_package = list ()
@@ -66,7 +66,7 @@ class GaleaEmulator (object):
                         single_package.append (random.randint (0, 255))
                     single_package[0] = self.package_num
                     
-                    timestamp = bytearray (struct.pack ('d', time.time ()))
+                    timestamp = bytearray (struct.pack ('d', self.package_num / 1000))
                     eda = bytearray (struct.pack ('f', random.random ()))
                     ppg_red = bytearray (struct.pack ('i', int (random.random () * 5000)))
                     ppg_ir = bytearray (struct.pack ('i', int (random.random () * 5000)))
@@ -85,7 +85,6 @@ class GaleaEmulator (object):
                     self.package_num = self.package_num + 1
                     if self.package_num % 256 == 0:
                         self.package_num = 0
-                        self.server_socket.sendto (str.encode ("new package"), self.addr)
 
                     transaction.append (single_package)
                 try:
@@ -95,8 +94,6 @@ class GaleaEmulator (object):
                     self.server_socket.sendto (bytes (package), self.addr)
                 except socket.timeout:
                     logging.info ('timeout for send')
-                if self.state == State.send_once.value:
-                    self.state = State.wait.value
 
 
 def main ():
